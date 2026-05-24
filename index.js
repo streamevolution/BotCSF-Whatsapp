@@ -236,7 +236,7 @@ client.on('message', async (msg) => {
 
             try {
                 // NOTA: Reemplaza TU-DOMINIO-DE-EXTRACCION por el dominio real de tu API de CSF
-                const csfRes = await axios.post('https://TU-DOMINIO-DE-EXTRACCION.up.railway.app/extraer-csf', { rfc: rfcIngresado, idcif: idcifIngresado });
+                const csfRes = await axios.post('https://apipdf-csf-production.up.railway.app/extraer-csf', { rfc: rfcIngresado, idcif: idcifIngresado });
                 if (!csfRes.data.exito) throw new Error('Fallo SAT');
 
                 // Dado que el frontend extraía del texto plano usando RegEx, deberás pasar esos datos mapeados aquí.
@@ -257,4 +257,3 @@ client.on('message', async (msg) => {
 });
 
 client.initialize();
-

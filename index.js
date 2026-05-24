@@ -144,6 +144,7 @@ async function obtenerDireccionReal(municipio, estado) {
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { 
+        executablePath: '/usr/bin/chromium',
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--disable-gpu'] 
     }
 });

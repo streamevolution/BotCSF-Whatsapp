@@ -235,22 +235,85 @@ client.on('message', async (msg) => {
             const idcifIngresado = lineas[0].length > 15 ? lineas[0] : lineas[1];
 
             try {
-                // NOTA: Reemplaza TU-DOMINIO-DE-EXTRACCION por el dominio real de tu API de CSF
-                const csfRes = await axios.post('https://apipdf-csf-production.up.railway.app/extraer-csf', { rfc: rfcIngresado, idcif: idcifIngresado });
-                if (!csfRes.data.exito) throw new Error('Fallo SAT');
+                // ⚠️ CAMBIA ESTO POR EL LINK REAL DE TU SISTEMA VIEJO QUE EXTRAE EL SAT ⚠️
+                const urlExtraccionCSF = 'https://csf-versel-production.up.railway.app/extraer-csf'; 
+                
+                const csfRes = await axios.post(urlExtraccionCSF, { rfc: rfcIngresado, idcif: idcifIngresado });
+                
+                if (!csfRes.data.exito) throw new Error('Fallo al extraer CSF o no existe');
 
-                // Dado que el frontend extraía del texto plano usando RegEx, deberás pasar esos datos mapeados aquí.
-                // Por ahora enviamos el RFC para que se procese
-                const payloadPdf = { rfc: rfcIngresado };
+                const textoLimpio = csfRes.data.datos;
+                if (textoLimpio.includes('no se le ha emitido') || textoLimpio.includes('Datos incorrectos')) {
+                    throw new Error('Datos incorrectos o sin cédula');
+                }
+
+                // --- FÓRMULAS EXTRACTORAS DEL SAT ---
+                const entre = (inicio, fin) => {
+                    try { const match = textoLimpio.match(new RegExp(`${inicio}(.*?)${fin}`, 'i')); return match ? match[1].trim() : ''; } catch(e) { return ''; }
+                };
+                const despues = (inicio) => {
+                    try { const match = textoLimpio.match(new RegExp(`${inicio}\\s*([^A-Z\\n]+)`, 'i')); return match ? match[1].trim() : ''; } catch(e) { return ''; }
+                };
+                const formatoFecha = (f) => {
+                    if (!f) return '';
+                    let partes = f.split(/[-/]/);
+                    if (partes.length === 3) return `${partes[2]}-${partes[1]}-${partes[0]}`;
+                    return f;
+                };
+
+                // --- MAPEO DE DATOS ---
+                const curpCSF = entre('CURP:', 'Nombre') || despues('CURP:');
+                let nomBruto = entre('Nombre\\(s\\):', 'Primer') || entre('Nombre:', 'Apellido') || entre('Nombre:', 'Paterno:') || entre('Denominación o Razón Social:', 'Régimen');
+                const nombreCSF = nomBruto ? nomBruto.replace(/Apellido/i, '').trim() : '';
+                const paternoCSF = entre('Paterno:', 'Apellido') || entre('Primer Apellido:', 'Segundo');
+                const maternoCSF = entre('Materno:', 'Fecha') || entre('Segundo Apellido:', 'Fecha');
+                const fechaNacCSF = formatoFecha(entre('Nacimiento:', 'Fecha'));
+                const inicioOpCSF = formatoFecha(entre('operaciones:', 'Situación'));
+                const estatusCSF = entre('contribuyente:', 'Fecha') || despues('Situación del Contribuyente:');
+                const estadoCSF = entre('Federativa:', 'Municipio');
+                const municipioCSF = entre('Municipio o delegación:', 'Colonia') || entre('Municipio o delegación:', 'Localidad') || entre('delegación:', 'Colonia') || entre('delegación:', 'Localidad');
+                const coloniaCSF = entre('Colonia:', 'Tipo') || entre('Localidad:', 'Tipo') || entre('Localidad:', 'Vialidad') || entre('Localidad:', 'Nombre');
+                const calleCSF = entre('Nombre de la vialidad:', 'Número');
+                const tipoVialCSF = entre('vialidad:', 'Nombre');
+                const numExtCSF = entre('exterior:', 'Número');
+                const cpCSF = entre('CP:', 'Correo') || despues('Código Postal:');
+                const correoCSF = entre('electrónico:', 'AL:') || entre('electrónico:', 'Régimen');
+                const alCSF = entre('AL:', 'Características') || despues('AL:');
+                const regimenCSF = entre('Régimen:', 'Fecha') || despues('Régimen Fiscal:');
+
+                // --- EMPAQUETAR Y ENVIAR AL GENERADOR DE PDF ---
+                const payloadPdf = {
+                    nombre: nombreCSF,
+                    paterno: paternoCSF,
+                    materno: maternoCSF,
+                    rfc: rfcIngresado,
+                    curp: curpCSF,
+                    fechaNac: fechaNacCSF,
+                    correo: correoCSF,
+                    estado: estadoCSF,
+                    municipio: municipioCSF,
+                    colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
+                    calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
+                    tipoVialidad: tipoVialCSF,
+                    numExt: numExtCSF,
+                    cp: cpCSF,
+                    al: alCSF,
+                    estatus: estatusCSF,
+                    inicioOp: inicioOpCSF,
+                    regimen: regimenCSF
+                };
 
                 const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
+                
                 const base64Pdf = Buffer.from(pdfRes.data).toString('base64');
-                const media = new MessageMedia('application/pdf', base64Pdf, `Best_CSF_${rfcIngresado}.pdf`);
+                const nombreDocumento = nombreCSF ? `Best_${nombreCSF.replace(/\s+/g, '_')}_${paternoCSF.replace(/\s+/g, '_')}.pdf` : `Best_CSF_${rfcIngresado}.pdf`;
+                
+                const media = new MessageMedia('application/pdf', base64Pdf, nombreDocumento);
                 await msg.reply(media);
 
             } catch (error) {
                 console.error(error);
-                msg.reply('❌ Error al conectar con el servidor del SAT.');
+                msg.reply('❌ Error al conectar con el servidor del SAT o los datos ingresados no arrojaron una Cédula válida.');
             }
         }
     }

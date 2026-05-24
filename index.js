@@ -143,7 +143,10 @@ async function obtenerDireccionReal(municipio, estado) {
 // --- 3. CONFIGURACIÓN DEL CLIENTE WHATSAPP ---
 const client = new Client({
     authStrategy: new LocalAuth(),
-    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--disable-gpu'] }
+    puppeteer: { 
+        executablePath: '/usr/bin/chromium',
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--disable-gpu'] 
+    }
 });
 
 client.on('qr', (qr) => { qrActual = qr; });

@@ -178,23 +178,25 @@ client.on('message', async (msg) => {
             const base64QR = Buffer.from(valoresQR.join('~'), 'utf-8').toString('base64');
             const urlSeguro = 'https://www.siiat-sat-gobmx.com/app/qr/faces/pages/mobile/validar?v=' + base64QR;
 
-            // --- LÓGICA DE NUEVOS CAMPOS ---
             const nombreCompleto = `${datos.nombre} ${datos.primerApellido} ${datos.segundoApellido || ''}`.trim();
-            const idcifAleatorio = String(Math.floor(Math.random() * 90000000000) + 10000000000); // 11 dígitos al azar
+            const idcifAleatorio = String(Math.floor(Math.random() * 90000000000) + 10000000000); 
 
             const payloadPdf = {
                 nombre: datos.nombre, paterno: datos.primerApellido, materno: datos.segundoApellido,
                 curp: texto, rfc: rfcCalculado, fechaNac: fechaNacFmt, correo: correoFmt,
                 estado: datos.entidadNacimiento, municipio: muniLimpio,
                 colonia: direccion.colonia, calle: direccion.calle,
-                tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, cp: direccion.cp, al: alCalculado,
+                tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, 
+                numInt: '', // En CURP se deja vacío
+                localidad: muniLimpio, // Usamos municipio como localidad por defecto en RENAPO
+                cp: direccion.cp, al: alCalculado,
                 estatus: 'ACTIVO', inicioOp: fechaOperaciones,
                 regimen: 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios',
                 qrTexto: urlSeguro,
                 fechaEmision: obtenerFechaEmision(),
                 fullName: nombreCompleto,
                 idcif: idcifAleatorio,
-                ultimoOp: fechaOperaciones // En modo CURP es igual al inicio
+                ultimoOp: fechaOperaciones
             };
 
             const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
@@ -241,24 +243,26 @@ client.on('message', async (msg) => {
                 const fechaNacCSF = formatoFecha(entre('Nacimiento:', 'Fecha'));
                 const inicioOpCSF = formatoFecha(entre('operaciones:', 'Situación'));
                 const estatusCSF = entre('contribuyente:', 'Fecha') || despues('Situación del Contribuyente:');
-                
-                // Extraemos "Último Cambio de Estado"
                 const ultimoCambioCSF = formatoFecha(entre('cambio de situación:', 'Datos') || despues('cambio de estado:'));
-
                 const estadoCSF = entre('Federativa:', 'Municipio');
-                const municipioCSF = entre('Municipio o delegación:', 'Colonia') || entre('Municipio o delegación:', 'Localidad') || entre('delegación:', 'Colonia') || entre('delegación:', 'Localidad');
-                const coloniaCSF = entre('Colonia:', 'Tipo') || entre('Localidad:', 'Tipo') || entre('Localidad:', 'Vialidad') || entre('Localidad:', 'Nombre');
+                
+                // --- AJUSTES EN REGEX PARA BÚSQUEDA EXACTA DEL SAT ---
+                const coloniaCSF = entre('Colonia:', 'Nombre de la Localidad') || entre('Colonia:', 'Localidad') || entre('Colonia:', 'Tipo') || '';
                 const calleCSF = entre('Nombre de la vialidad:', 'Número');
-                const tipoVialCSF = entre('vialidad:', 'Nombre');
-                const numExtCSF = entre('exterior:', 'Número');
+                const tipoVialCSF = entre('vialidad:', 'Nombre de la vialidad') || entre('vialidad:', 'Nombre');
+                const numExtCSF = entre('exterior:', 'Número interior') || entre('exterior:', 'Número');
+                
+                // Nuevos campos extraídos con precisión
+                const numIntCSF = entre('interior:', 'Nombre de la Colonia') || entre('interior:', 'Colonia') || '';
+                const localidadCSF = entre('Nombre de la Localidad:', 'Nombre del Municipio') || entre('Localidad:', 'Municipio') || '';
+                const municipioCSF = entre('Demarcación Territorial:', 'Nombre de la Entidad') || entre('Demarcación Territorial:', 'Entidad') || entre('Municipio o delegación:', 'Colonia') || '';
+
                 const cpCSF = entre('CP:', 'Correo') || despues('Código Postal:');
                 const correoCSF = entre('electrónico:', 'AL:') || entre('electrónico:', 'Régimen');
                 const alCSF = entre('AL:', 'Características') || despues('AL:');
                 const regimenCSF = entre('Régimen:', 'Fecha') || despues('Régimen Fiscal:');
 
                 const urlFuenteSAT = `https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3=${idcifIngresado}_${rfcIngresado}`;
-
-                // --- LÓGICA DE NUEVOS CAMPOS ---
                 const nombreCompleto = `${nombreCSF} ${paternoCSF} ${maternoCSF}`.trim();
 
                 const payloadPdf = {
@@ -267,13 +271,17 @@ client.on('message', async (msg) => {
                     estado: estadoCSF, municipio: municipioCSF,
                     colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
                     calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
-                    tipoVialidad: tipoVialCSF, numExt: numExtCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
+                    tipoVialidad: tipoVialCSF, 
+                    numExt: numExtCSF, 
+                    numInt: numIntCSF, // SE ENVÍA EL DATO
+                    localidad: localidadCSF, // SE ENVÍA EL DATO
+                    cp: cpCSF, al: alCSF, estatus: estatusCSF,
                     inicioOp: inicioOpCSF, regimen: regimenCSF,
                     qrTexto: urlFuenteSAT,
                     fechaEmision: obtenerFechaEmision(),
                     fullName: nombreCompleto,
-                    idcif: idcifIngresado, // Usa el real ingresado por el usuario
-                    ultimoOp: ultimoCambioCSF // Extraído de la Cédula
+                    idcif: idcifIngresado, 
+                    ultimoOp: ultimoCambioCSF 
                 };
 
                 const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
@@ -292,4 +300,3 @@ client.on('message', async (msg) => {
 });
 
 client.initialize();
-

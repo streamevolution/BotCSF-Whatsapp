@@ -187,8 +187,8 @@ client.on('message', async (msg) => {
                 estado: datos.entidadNacimiento, municipio: muniLimpio,
                 colonia: direccion.colonia, calle: direccion.calle,
                 tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, 
-                numInt: '', // En CURP se deja vacío
-                localidad: muniLimpio, // Usamos municipio como localidad por defecto en RENAPO
+                numInt: '', 
+                localidad: muniLimpio, 
                 cp: direccion.cp, al: alCalculado,
                 estatus: 'ACTIVO', inicioOp: fechaOperaciones,
                 regimen: 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios',
@@ -220,7 +220,7 @@ client.on('message', async (msg) => {
             const idcifIngresado = lineas[0].length > 15 ? lineas[0] : lineas[1];
 
             try {
-                // ⚠️ VERIFICA QUE PONGAS TU URL REAL AQUÍ ⚠️
+                // ⚠️ VERIFICA QUE PONGAS TU URL REAL AQUÍ ANTES DE GUARDAR ⚠️
                 const urlExtraccionCSF = 'https://csf-versel-production.up.railway.app/extraer-csf'; 
                 
                 const csfRes = await axios.post(urlExtraccionCSF, { rfc: rfcIngresado, idcif: idcifIngresado });
@@ -246,16 +246,15 @@ client.on('message', async (msg) => {
                 const ultimoCambioCSF = formatoFecha(entre('cambio de situación:', 'Datos') || despues('cambio de estado:'));
                 const estadoCSF = entre('Federativa:', 'Municipio');
                 
-                // --- AJUSTES EN REGEX PARA BÚSQUEDA EXACTA DEL SAT ---
                 const coloniaCSF = entre('Colonia:', 'Nombre de la Localidad') || entre('Colonia:', 'Localidad') || entre('Colonia:', 'Tipo') || '';
                 const calleCSF = entre('Nombre de la vialidad:', 'Número');
                 const tipoVialCSF = entre('vialidad:', 'Nombre de la vialidad') || entre('vialidad:', 'Nombre');
-                const numExtCSF = entre('exterior:', 'Número interior') || entre('exterior:', 'Número');
+                const numExtCSF = entre('exterior:', 'Número Int') || entre('exterior:', 'Número interior') || entre('exterior:', 'Número');
                 
-                // Nuevos campos extraídos con precisión
-                const numIntCSF = entre('interior:', 'Nombre de la Colonia') || entre('interior:', 'Colonia') || '';
-                const localidadCSF = entre('Nombre de la Localidad:', 'Nombre del Municipio') || entre('Localidad:', 'Municipio') || '';
-                const municipioCSF = entre('Demarcación Territorial:', 'Nombre de la Entidad') || entre('Demarcación Territorial:', 'Entidad') || entre('Municipio o delegación:', 'Colonia') || '';
+                // --- LOS 3 CAMPOS EXACTAMENTE CON LAS REGLAS QUE PEDISTE ---
+                const numIntCSF = entre('Número Int:', 'Nombre de la Colonia') || entre('Número Int:', 'Colonia') || despues('Número Int:');
+                const localidadCSF = entre('Municipio / Delegación:', 'Nombre de la Entidad') || entre('Municipio / Delegación:', 'Entidad') || despues('Municipio / Delegación:');
+                const municipioCSF = entre('Nombre del Municipio o Demarcación Territorial:', 'Nombre de la Entidad') || entre('Nombre del Municipio o Demarcación Territorial:', 'Entidad') || despues('Nombre del Municipio o Demarcación Territorial:');
 
                 const cpCSF = entre('CP:', 'Correo') || despues('Código Postal:');
                 const correoCSF = entre('electrónico:', 'AL:') || entre('electrónico:', 'Régimen');
@@ -268,13 +267,14 @@ client.on('message', async (msg) => {
                 const payloadPdf = {
                     nombre: nombreCSF, paterno: paternoCSF, materno: maternoCSF,
                     rfc: rfcIngresado, curp: curpCSF, fechaNac: fechaNacCSF, correo: correoCSF,
-                    estado: estadoCSF, municipio: municipioCSF,
+                    estado: estadoCSF, 
+                    municipio: municipioCSF, // AHORA BUSCA LA FRASE EXACTA
                     colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
                     calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
                     tipoVialidad: tipoVialCSF, 
                     numExt: numExtCSF, 
-                    numInt: numIntCSF, // SE ENVÍA EL DATO
-                    localidad: localidadCSF, // SE ENVÍA EL DATO
+                    numInt: numIntCSF, // AHORA BUSCA "Número Int"
+                    localidad: localidadCSF, // AHORA BUSCA "Municipio / Delegación"
                     cp: cpCSF, al: alCSF, estatus: estatusCSF,
                     inicioOp: inicioOpCSF, regimen: regimenCSF,
                     qrTexto: urlFuenteSAT,

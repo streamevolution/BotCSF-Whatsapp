@@ -7,7 +7,6 @@ const app = express();
 let qrActual = '';
 let botListo = false;
 
-// --- 1. PORTAL WEB PARA VER EL QR ---
 app.get('/', async (req, res) => {
     if (botListo) {
         res.send('<h1 style="text-align:center; margin-top:50px; font-family:sans-serif; color:#01b574;">✅ Bot conectado y funcionando</h1>');
@@ -27,18 +26,12 @@ app.get('/', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor web encendido en puerto ${PORT}`));
 
-// --- 2. HERRAMIENTAS Y FUNCIONES DEL FRONTEND ORIGINAL ---
-
-// NUEVA FUNCIÓN: FECHA DE EMISIÓN EN DOS LÍNEAS (DÍAS HÁBILES)
+// --- HERRAMIENTAS Y FUNCIONES ---
 function obtenerFechaEmision() {
     let fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
-    let diaSemana = fecha.getDay(); // 0: Domingo, 6: Sábado
-    
-    if (diaSemana === 6) { // Sábado
-        fecha.setDate(fecha.getDate() - 1);
-    } else if (diaSemana === 0) { // Domingo
-        fecha.setDate(fecha.getDate() - 2);
-    }
+    let diaSemana = fecha.getDay(); 
+    if (diaSemana === 6) fecha.setDate(fecha.getDate() - 1);
+    else if (diaSemana === 0) fecha.setDate(fecha.getDate() - 2);
 
     let dia = fecha.getDate();
     let meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
@@ -50,10 +43,7 @@ function obtenerFechaEmision() {
 
 function calcularRFC(nombre, paterno, materno, fechaStr) {
     if (!nombre || !paterno || !fechaStr) return '';
-    const limpiarCadena = (str) => {
-        let s = str.toUpperCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return s.replace(/[^A-ZÑ ]/g, "");
-    };
+    const limpiarCadena = (str) => str.toUpperCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-ZÑ ]/g, "");
     const filtrarPalabras = (str) => {
         const ignoradas = ["DA", "DAS", "DE", "DEL", "DER", "DI", "DIE", "DD", "EL", "LA", "LOS", "LAS", "LE", "LES", "MAC", "MC", "VAN", "VON", "Y"];
         return str.split(" ").filter(p => !ignoradas.includes(p) && p !== "").join(" ");
@@ -134,7 +124,7 @@ async function obtenerDireccionReal(municipio, estado) {
     return dir;
 }
 
-// --- 3. CONFIGURACIÓN DEL CLIENTE WHATSAPP ---
+// --- CONFIGURACIÓN WHATSAPP ---
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: { 
@@ -147,7 +137,7 @@ const client = new Client({
 client.on('qr', (qr) => { qrActual = qr; });
 client.on('ready', () => { botListo = true; qrActual = ''; console.log('✅ BOT LISTO'); });
 
-// --- 4. LÓGICA DEL BOT ---
+// --- LÓGICA DEL BOT ---
 client.on('message', async (msg) => {
     const texto = msg.body.trim().toUpperCase();
 
@@ -188,17 +178,23 @@ client.on('message', async (msg) => {
             const base64QR = Buffer.from(valoresQR.join('~'), 'utf-8').toString('base64');
             const urlSeguro = 'https://www.siiat-sat-gobmx.com/app/qr/faces/pages/mobile/validar?v=' + base64QR;
 
+            // --- LÓGICA DE NUEVOS CAMPOS ---
+            const nombreCompleto = `${datos.nombre} ${datos.primerApellido} ${datos.segundoApellido || ''}`.trim();
+            const idcifAleatorio = String(Math.floor(Math.random() * 90000000000) + 10000000000); // 11 dígitos al azar
+
             const payloadPdf = {
                 nombre: datos.nombre, paterno: datos.primerApellido, materno: datos.segundoApellido,
                 curp: texto, rfc: rfcCalculado, fechaNac: fechaNacFmt, correo: correoFmt,
                 estado: datos.entidadNacimiento, municipio: muniLimpio,
                 colonia: direccion.colonia, calle: direccion.calle,
-                tipoVialidad: direccion.tipoVialidad, 
-                numExt: direccion.numExt, cp: direccion.cp, al: alCalculado,
+                tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, cp: direccion.cp, al: alCalculado,
                 estatus: 'ACTIVO', inicioOp: fechaOperaciones,
                 regimen: 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios',
                 qrTexto: urlSeguro,
-                fechaEmision: obtenerFechaEmision() // SE AÑADE LA NUEVA FECHA
+                fechaEmision: obtenerFechaEmision(),
+                fullName: nombreCompleto,
+                idcif: idcifAleatorio,
+                ultimoOp: fechaOperaciones // En modo CURP es igual al inicio
             };
 
             const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
@@ -222,7 +218,7 @@ client.on('message', async (msg) => {
             const idcifIngresado = lineas[0].length > 15 ? lineas[0] : lineas[1];
 
             try {
-                // ⚠️ VERIFICA QUE PONGAS TU URL AQUÍ ⚠️
+                // ⚠️ VERIFICA QUE PONGAS TU URL REAL AQUÍ ⚠️
                 const urlExtraccionCSF = 'https://csf-versel-production.up.railway.app/extraer-csf'; 
                 
                 const csfRes = await axios.post(urlExtraccionCSF, { rfc: rfcIngresado, idcif: idcifIngresado });
@@ -245,6 +241,10 @@ client.on('message', async (msg) => {
                 const fechaNacCSF = formatoFecha(entre('Nacimiento:', 'Fecha'));
                 const inicioOpCSF = formatoFecha(entre('operaciones:', 'Situación'));
                 const estatusCSF = entre('contribuyente:', 'Fecha') || despues('Situación del Contribuyente:');
+                
+                // Extraemos "Último Cambio de Estado"
+                const ultimoCambioCSF = formatoFecha(entre('cambio de situación:', 'Datos') || despues('cambio de estado:'));
+
                 const estadoCSF = entre('Federativa:', 'Municipio');
                 const municipioCSF = entre('Municipio o delegación:', 'Colonia') || entre('Municipio o delegación:', 'Localidad') || entre('delegación:', 'Colonia') || entre('delegación:', 'Localidad');
                 const coloniaCSF = entre('Colonia:', 'Tipo') || entre('Localidad:', 'Tipo') || entre('Localidad:', 'Vialidad') || entre('Localidad:', 'Nombre');
@@ -258,17 +258,22 @@ client.on('message', async (msg) => {
 
                 const urlFuenteSAT = `https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3=${idcifIngresado}_${rfcIngresado}`;
 
+                // --- LÓGICA DE NUEVOS CAMPOS ---
+                const nombreCompleto = `${nombreCSF} ${paternoCSF} ${maternoCSF}`.trim();
+
                 const payloadPdf = {
                     nombre: nombreCSF, paterno: paternoCSF, materno: maternoCSF,
                     rfc: rfcIngresado, curp: curpCSF, fechaNac: fechaNacCSF, correo: correoCSF,
                     estado: estadoCSF, municipio: municipioCSF,
                     colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
                     calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
-                    tipoVialidad: tipoVialCSF, 
-                    numExt: numExtCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
+                    tipoVialidad: tipoVialCSF, numExt: numExtCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
                     inicioOp: inicioOpCSF, regimen: regimenCSF,
                     qrTexto: urlFuenteSAT,
-                    fechaEmision: obtenerFechaEmision() // SE AÑADE LA NUEVA FECHA
+                    fechaEmision: obtenerFechaEmision(),
+                    fullName: nombreCompleto,
+                    idcif: idcifIngresado, // Usa el real ingresado por el usuario
+                    ultimoOp: ultimoCambioCSF // Extraído de la Cédula
                 };
 
                 const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
@@ -287,3 +292,4 @@ client.on('message', async (msg) => {
 });
 
 client.initialize();
+

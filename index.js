@@ -187,7 +187,7 @@ client.on('message', async (msg) => {
                 curp: texto, rfc: rfcCalculado, fechaNac: fechaNacFmt, correo: correoFmt,
                 estado: datos.entidadNacimiento, municipio: muniLimpio,
                 colonia: direccion.colonia, calle: direccion.calle,
-                tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, cp: direccion.cp, al: alCalculado,
+                tipoVialidad: direccion.tipoVialidad, numExt: direccion.numExt, numInt: '', cp: direccion.cp, al: alCalculado,
                 estatus: 'ACTIVO', inicioOp: fechaOperaciones,
                 regimen: 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios',
                 qrTexto: urlSeguro,
@@ -251,6 +251,10 @@ client.on('message', async (msg) => {
                 const calleCSF = entre('Nombre de la vialidad:', 'Número');
                 const tipoVialCSF = entre('vialidad:', 'Nombre');
                 const numExtCSF = entre('exterior:', 'Número');
+                
+                // Extracción de Número Interior
+                const numIntCSF = entre('interior:', 'Colonia') || entre('interior:', 'Localidad') || entre('Número Int:', 'Colonia') || '';
+                
                 const cpCSF = entre('CP:', 'Correo') || despues('Código Postal:');
                 const correoCSF = entre('electrónico:', 'AL:') || entre('electrónico:', 'Régimen');
                 const alCSF = entre('AL:', 'Características') || despues('AL:');
@@ -267,7 +271,7 @@ client.on('message', async (msg) => {
                     estado: estadoCSF, municipio: municipioCSF,
                     colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
                     calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
-                    tipoVialidad: tipoVialCSF, numExt: numExtCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
+                    tipoVialidad: tipoVialCSF, numExt: numExtCSF, numInt: numIntCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
                     inicioOp: inicioOpCSF, regimen: regimenCSF,
                     qrTexto: urlFuenteSAT,
                     fechaEmision: obtenerFechaEmision(),

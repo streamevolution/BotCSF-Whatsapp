@@ -29,6 +29,25 @@ app.listen(PORT, () => console.log(`Servidor web encendido en puerto ${PORT}`));
 
 // --- 2. HERRAMIENTAS Y FUNCIONES DEL FRONTEND ORIGINAL ---
 
+// NUEVA FUNCIÓN: FECHA DE EMISIÓN EN DOS LÍNEAS (DÍAS HÁBILES)
+function obtenerFechaEmision() {
+    let fecha = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Mexico_City"}));
+    let diaSemana = fecha.getDay(); // 0: Domingo, 6: Sábado
+    
+    if (diaSemana === 6) { // Sábado
+        fecha.setDate(fecha.getDate() - 1);
+    } else if (diaSemana === 0) { // Domingo
+        fecha.setDate(fecha.getDate() - 2);
+    }
+
+    let dia = fecha.getDate();
+    let meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+    let mes = meses[fecha.getMonth()];
+    let anio = fecha.getFullYear();
+
+    return `CUAHUTEMOC, CIUDAD DE MEXICO, A ${dia} DE\n${mes} DE ${anio}`;
+}
+
 function calcularRFC(nombre, paterno, materno, fechaStr) {
     if (!nombre || !paterno || !fechaStr) return '';
     const limpiarCadena = (str) => {
@@ -158,7 +177,6 @@ client.on('message', async (msg) => {
             const alCalculado = obtenerALPorEstado(datos.entidadNacimiento);
             const rfcCalculado = calcularRFC(datos.nombre, datos.primerApellido, datos.segundoApellido, fechaNacFmt);
 
-            // --- LÓGICA QR DINÁMICA MODO 1 ---
             const valoresQR = [
                 rfcCalculado, texto, datos.nombre, datos.primerApellido, datos.segundoApellido,
                 fechaNacFmt, fechaOperaciones, 'ACTIVO', fechaOperaciones, datos.entidadNacimiento,
@@ -175,11 +193,12 @@ client.on('message', async (msg) => {
                 curp: texto, rfc: rfcCalculado, fechaNac: fechaNacFmt, correo: correoFmt,
                 estado: datos.entidadNacimiento, municipio: muniLimpio,
                 colonia: direccion.colonia, calle: direccion.calle,
-                tipoVialidad: direccion.tipoVialidad, // NUEVO CAMPO
+                tipoVialidad: direccion.tipoVialidad, 
                 numExt: direccion.numExt, cp: direccion.cp, al: alCalculado,
                 estatus: 'ACTIVO', inicioOp: fechaOperaciones,
                 regimen: 'Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios',
-                qrTexto: urlSeguro // SE MANDA EL LINK DINÁMICO
+                qrTexto: urlSeguro,
+                fechaEmision: obtenerFechaEmision() // SE AÑADE LA NUEVA FECHA
             };
 
             const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
@@ -237,7 +256,6 @@ client.on('message', async (msg) => {
                 const alCSF = entre('AL:', 'Características') || despues('AL:');
                 const regimenCSF = entre('Régimen:', 'Fecha') || despues('Régimen Fiscal:');
 
-                // --- LÓGICA QR DINÁMICA MODO 2 ---
                 const urlFuenteSAT = `https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3=${idcifIngresado}_${rfcIngresado}`;
 
                 const payloadPdf = {
@@ -246,10 +264,11 @@ client.on('message', async (msg) => {
                     estado: estadoCSF, municipio: municipioCSF,
                     colonia: coloniaCSF.toUpperCase().replace(/^COLONIA\s+/i, '').trim(),
                     calle: calleCSF.toUpperCase().replace(/^CALLE\s+(?![0-9])/i, '').trim(),
-                    tipoVialidad: tipoVialCSF, // NUEVO CAMPO
+                    tipoVialidad: tipoVialCSF, 
                     numExt: numExtCSF, cp: cpCSF, al: alCSF, estatus: estatusCSF,
                     inicioOp: inicioOpCSF, regimen: regimenCSF,
-                    qrTexto: urlFuenteSAT // SE MANDA EL LINK DINÁMICO
+                    qrTexto: urlFuenteSAT,
+                    fechaEmision: obtenerFechaEmision() // SE AÑADE LA NUEVA FECHA
                 };
 
                 const pdfRes = await axios.post('https://apipdf-csf-production.up.railway.app/api/generar-pdf', payloadPdf, { responseType: 'arraybuffer' });
